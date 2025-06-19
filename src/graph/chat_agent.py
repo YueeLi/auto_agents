@@ -8,6 +8,8 @@ from typing_extensions import TypedDict
 
 from langgraph.graph import StateGraph, START
 from langgraph.graph.message import add_messages
+from langgraph.prebuilt.chat_agent_executor import AgentState
+
 
 from langgraph.checkpoint.memory import MemorySaver
 

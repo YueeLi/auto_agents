@@ -41,6 +41,7 @@ dependencies = [
     "ipython>=9.3.0",
     "langchain-mcp-adapters>=0.1.7",
     "mcp>=1.9.4",
+    "langmem>=0.0.27",
 ]
 
 [project.urls]
