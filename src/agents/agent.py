@@ -1,3 +1,4 @@
+from pyexpat import model
 from langgraph.prebuilt import create_react_agent
 from langgraph.prebuilt.chat_agent_executor import AgentState
 from typing_extensions import Annotated, TypedDict
@@ -49,11 +50,7 @@ def trim_messages_with_modified(state):
     return {"messages": [RemoveMessage(REMOVE_ALL_MESSAGES)] + trimmed_messages}
 
 
-model=AzureChatOpenAI(
-    deployment_name="gpt-4-32k",
-    model_name="gpt-4-32k",
-)
-
+model = get_llm_by_type("basic")
 
 summarization_node = SummarizationNode(
         token_counter=count_tokens_approximately,
@@ -80,20 +77,3 @@ def print_stream(stream, output_messages_key="llm_input_messages"):
         print("\n\n")
 
 
-
-# To control agent execution and avoid infinite loops, set a recursion limit. 
-# This defines the maximum number of steps the agent can take before raising a GraphRecursionError. 
-# You can configure recursion_limit at runtime or when defining agent via .with_config()
-max_iterations = 3
-recursion_limit = 2 * max_iterations + 1
-
-def create_agent(state: AgentState, llm_type: LLMType, tools: dict, prompt_name: str):
-    agent = create_react_agent(
-        model=get_llm_by_type(llm_type),
-        prompt=get_prompt_template(prompt_name),
-        tools=[tools],
-        state_schema=state,
-        pre_model_hook=trim_messages_with_untouched,
-        post_model_hook=None, # TODO
-    )
-    return agent

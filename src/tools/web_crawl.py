@@ -66,144 +66,137 @@ class WebCrawlInput(BaseModel):
 
 # --- Tavily Web Crawl Tool ---
 
-def create_tavily_web_crawl_tool(**kwargs):
-    """Creates a Tavily web crawl tool instance."""
+def _get_tavily_client() -> TavilyExtract:
+    """Initializes and returns a TavilyExtract client."""
+    api_key = os.getenv("TAVILY_API_KEY")
+    if not api_key:
+        raise ConfigurationError("TAVILY_API_KEY environment variable is required.")
+    
+    user_agent = os.getenv("USER_AGENT", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    
+    try:
+        return TavilyExtract(
+            tavily_api_key=api_key,
+            extract_depth="advanced",
+            include_images=True,
+            format="markdown",
+            user_agent=user_agent
+        )
+    except Exception as e:
+        raise NetworkError(f"Failed to initialize Tavily client: {e}")
 
-    def _get_tavily_client() -> TavilyExtract:
-        """Initializes and returns a TavilyExtract client."""
-        api_key = os.getenv("TAVILY_API_KEY")
-        if not api_key:
-            raise ConfigurationError("TAVILY_API_KEY environment variable is required.")
+@tool("tavily_web_crawl", args_schema=WebCrawlInput)
+def tavily_web_crawl(url: str) -> str:
+    """Performs a web crawl and content extraction for a given URL using the Tavily API.
+
+    This tool is ideal for extracting structured content from web pages when high-quality, AI-driven extraction is needed.
+    It requires the TAVILY_API_KEY environment variable to be set.
+    """
+    logger.info(f"Executing Tavily web crawl for URL: {url}")
+    result = CrawlResult(url=url, content="")
+    try:
+        client = _get_tavily_client()
+        raw_results = client.invoke({"urls": [url]})
         
-        user_agent = os.getenv("USER_AGENT", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        
-        try:
-            return TavilyExtract(
-                tavily_api_key=api_key,
-                extract_depth="advanced",
-                include_images=True,
-                format="markdown",
-                user_agent=user_agent
-            )
-        except Exception as e:
-            raise NetworkError(f"Failed to initialize Tavily client: {e}")
+        results = raw_results.get("results", [])
+        if not results:
+            failed_results = raw_results.get("failed_results", [])
+            error_details = failed_results[0].get("error", "Unknown error") if failed_results else "No content extracted"
+            raise ContentExtractionError(f"Extraction failed: {error_details}")
 
-    @tool("tavily_web_crawl", args_schema=WebCrawlInput)
-    def tavily_web_crawl(url: str) -> str:
-        """Performs a web crawl and content extraction for a given URL using the Tavily API.
+        first_result = results[0]
+        content = first_result.get("raw_content", "").strip()
+        if not content:
+            raise ContentExtractionError("Empty content extracted from Tavily.")
 
-        This tool is ideal for extracting structured content from web pages when high-quality, AI-driven extraction is needed.
-        It requires the TAVILY_API_KEY environment variable to be set.
-        """
-        logger.info(f"Executing Tavily web crawl for URL: {url}")
-        result = CrawlResult(url=url, content="")
-        try:
-            client = _get_tavily_client()
-            raw_results = client.invoke({"urls": [url]})
-            
-            results = raw_results.get("results", [])
-            if not results:
-                failed_results = raw_results.get("failed_results", [])
-                error_details = failed_results[0].get("error", "Unknown error") if failed_results else "No content extracted"
-                raise ContentExtractionError(f"Extraction failed: {error_details}")
+        logger.info(f"Successfully crawled {url} with Tavily. Content length: {len(content)}")
+        result.content = content
+        result.status_code = 200  # Assuming 200 for successful Tavily extraction
+        return result.model_dump_json()
 
-            first_result = results[0]
-            content = first_result.get("raw_content", "").strip()
-            if not content:
-                raise ContentExtractionError("Empty content extracted from Tavily.")
-
-            logger.info(f"Successfully crawled {url} with Tavily. Content length: {len(content)}")
-            result.content = content
-            result.status_code = 200  # Assuming 200 for successful Tavily extraction
-            return result.model_dump_json()
-
-        except (ConfigurationError, NetworkError, ContentExtractionError) as e:
-            logger.error(f"Tavily crawl failed for {url}: {e}")
-            result.error = str(e)
-            return result.model_dump_json()
-        except Exception as e:
-            logger.exception(f"An unexpected error occurred during Tavily crawl for {url}: {e}")
-            result.error = f"An unexpected error occurred: {e}"
-            return result.model_dump_json()
-
-    return tavily_web_crawl
+    except (ConfigurationError, NetworkError, ContentExtractionError) as e:
+        logger.error(f"Tavily crawl failed for {url}: {e}")
+        result.error = str(e)
+        return result.model_dump_json()
+    except Exception as e:
+        logger.exception(f"An unexpected error occurred during Tavily crawl for {url}: {e}")
+        result.error = f"An unexpected error occurred: {e}"
+        return result.model_dump_json()
 
 # --- Requests-based Web Crawl Tool ---
 
-def create_requests_web_crawl_tool(**kwargs):
-    """Creates a requests-based web crawl tool instance."""
+def _create_requests_session() -> requests.Session:
+    """Creates a requests session with standard browser headers."""
+    session = requests.Session()
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    })
+    return session
 
-    def _create_requests_session() -> requests.Session:
-        """Creates a requests session with standard browser headers."""
-        session = requests.Session()
-        session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        })
-        return session
+@tool("requests_web_crawl", args_schema=WebCrawlInput)
+def requests_web_crawl(url: str) -> str:
+    """Crawls a web page using a standard HTTP GET request and extracts content.
 
-    @tool("requests_web_crawl", args_schema=WebCrawlInput)
-    def requests_web_crawl(url: str) -> str:
-        """Crawls a web page using a standard HTTP GET request and extracts content.
+    This tool is suitable for general-purpose crawling. It first tries a direct `requests.get()`
+    and falls back to `WebBaseLoader` if the initial content is empty.
+    """
+    logger.info(f"Executing requests-based web crawl for URL: {url}")
+    result = CrawlResult(url=url, content="")
 
-        This tool is suitable for general-purpose crawling. It first tries a direct `requests.get()`
-        and falls back to `WebBaseLoader` if the initial content is empty.
-        """
-        logger.info(f"Executing requests-based web crawl for URL: {url}")
-        result = CrawlResult(url=url, content="")
+    try:
+        parsed_url = urlparse(url)
+        if not all([parsed_url.scheme in ('http', 'https'), parsed_url.netloc]):
+            raise WebCrawlError(f"Invalid URL provided: {url}")
+    except Exception:
+        result.error = f"Invalid URL format for {url}."
+        return result.model_dump_json()
 
+    with _create_requests_session() as session:
         try:
-            parsed_url = urlparse(url)
-            if not all([parsed_url.scheme in ('http', 'https'), parsed_url.netloc]):
-                raise WebCrawlError(f"Invalid URL provided: {url}")
-        except Exception:
-            result.error = f"Invalid URL format for {url}."
+            response = session.get(url, timeout=30, allow_redirects=True)
+            response.raise_for_status()
+            response.encoding = response.apparent_encoding
+            content = response.text
+
+            result.status_code = response.status_code
+
+
+            if not content.strip():
+                logger.info(f"Initial request for {url} returned empty content, trying WebBaseLoader.")
+                loader = WebBaseLoader(
+                    web_paths=[url],
+                    requests_kwargs={'headers': session.headers, 'timeout': 30}
+                )
+                docs = loader.load()
+                if not docs or not docs[0].page_content.strip():
+                    raise ContentExtractionError("No content extracted by WebBaseLoader.")
+                content = docs[0].page_content
+
+            result.content = content
+            logger.info(f"Successfully crawled {url} with Requests. Content length: {len(content)}")
             return result.model_dump_json()
 
-        with _create_requests_session() as session:
-            if 'csdn.net' in url:
-                session.headers.update({
-                    'Referer': 'https://blog.csdn.net/',
-                    'Cookie': 'uuid_tt_dd=1_0; dc_session_id=1_1',
-                })
+        except RequestException as e:
+            logger.error(f"Network error crawling {url} with Requests: {e}")
+            result.error = f"A network error occurred: {e}"
+            if e.response is not None:
+                result.status_code = e.response.status_code
+            return result.model_dump_json()
+        except ContentExtractionError as e:
+            logger.error(f"Content extraction failed for {url}: {e}")
+            result.error = f"Failed to extract content: {e}"
+            return result.model_dump_json()
+        except Exception as e:
+            logger.exception(f"An unexpected error occurred during Requests crawl for {url}: {e}")
+            result.error = f"An unexpected error occurred: {e}"
+            return result.model_dump_json()
 
-            try:
-                response = session.get(url, timeout=30, allow_redirects=True)
-                response.raise_for_status()
-                response.encoding = response.apparent_encoding
-                content = response.text
 
-                result.status_code = response.status_code
-
-                if not content.strip():
-                    logger.info(f"Initial request for {url} returned empty content, trying WebBaseLoader.")
-                    loader = WebBaseLoader(
-                        web_paths=[url],
-                        requests_kwargs={'headers': session.headers, 'timeout': 30}
-                    )
-                    docs = loader.load()
-                    if not docs or not docs[0].page_content.strip():
-                        raise ContentExtractionError("No content extracted by WebBaseLoader.")
-                    content = docs[0].page_content
-
-                result.content = content
-                logger.info(f"Successfully crawled {url} with Requests. Content length: {len(content)}")
-                return result.model_dump_json()
-
-            except RequestException as e:
-                logger.error(f"Network error crawling {url} with Requests: {e}")
-                result.error = f"A network error occurred: {e}"
-                if e.response is not None:
-                    result.status_code = e.response.status_code
-                return result.model_dump_json()
-            except ContentExtractionError as e:
-                logger.error(f"Content extraction failed for {url}: {e}")
-                result.error = f"Failed to extract content: {e}"
-                return result.model_dump_json()
-            except Exception as e:
-                logger.exception(f"An unexpected error occurred during Requests crawl for {url}: {e}")
-                result.error = f"An unexpected error occurred: {e}"
-                return result.model_dump_json()
-
-    return requests_web_crawl
+if __name__ == "__main__":
+    url = "https://deepwiki.com/private-repo"
+    print("******tavily_web_crawl******")
+    print(tavily_web_crawl.invoke({"url": url}))
+    print("******requests_web_crawl******")
+    print(requests_web_crawl.invoke({"url": url}))

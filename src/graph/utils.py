@@ -14,7 +14,7 @@ def build_image(graph: CompiledGraph):
     if not os.path.exists(images_dir):
         os.makedirs(images_dir)
     # 图像文件名为 类名_image.png
-    image_name = f"{graph.__class__.__name__}_image.png"
+    image_name = f"{graph.name}_image.png"
     image_path = os.path.join(images_dir, image_name)
     print(f"创建图像: {image_path}")
     # 创建图像
