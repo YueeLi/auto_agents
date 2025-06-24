@@ -30,6 +30,17 @@ builder.add_node(
     query_database,
     retry=RetryPolicy(retry_on=sqlite3.OperationalError),
 )
+
+
+from langgraph.types import CachePolicy
+
+builder.add_node(
+    "node_name",
+    node_function,
+    cache_policy=CachePolicy(ttl=120),
+)
+
+
 builder.add_node("model", call_model, retry=RetryPolicy(max_attempts=5))
 builder.add_edge(START, "model")
 builder.add_edge("model", "query_database")
