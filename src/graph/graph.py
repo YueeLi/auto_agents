@@ -1,6 +1,6 @@
-根据您提供的 LangGraph State 知识梳理模板，我将为您总结 Graph 概念相关的全面知识。
-
-# LangGraph Graph 全面知识点与实战演示
+"""
+LangGraph Graph 全面知识点与实战演示
+=====================================================
 
 ## 关键要点梳理
 
@@ -214,3 +214,234 @@ Graph 概念是 LangGraph 的核心抽象，它将复杂的 AI 工作流建模�
 Wiki pages you might want to explore:
 - [Human-in-the-Loop Capabilities (langchain-ai/langgraph)](/wiki/langchain-ai/langgraph#4)
 - [Persistence System (langchain-ai/langgraph)](/wiki/langchain-ai/langgraph#5)
+"""
+
+
+################################################################################
+#
+# 实战演示：构建一个覆盖核心知识点的复杂 LangGraph 图
+#
+# 本示例将构建一个“多智能体研究团队”工作流，旨在演示 LangGraph 的核心功能。
+# 这个团队由一个“规划师”和多个并行的“研究员”以及一个“报告撰写者”组成。
+#
+# 覆盖的知识点（对应文件顶部的注释编号）：
+# 1. 图定义 (StateGraph)
+# 2. 节点系统 (Python 函数)
+# 3. 边连接 (固定边 & 条件边)
+# 5. 图编译 (compile)
+# 6. 并行执行 (通过 Send API 实现)
+# 7. 条件边 (Conditional Edges)
+# 8. Send API (用于 Map-Reduce 模式)
+# 11. 多代理架构 (通过不同角色的节点模拟)
+# 12. 人机交互 (中断与恢复)
+#
+################################################################################
+
+import asyncio
+from typing import TypedDict, List, Dict
+
+from langgraph.checkpoint.aiosqlite import AsyncSqliteSaver
+from langgraph.graph import StateGraph, END, Send
+from langgraph.graph.message import add_messages
+
+
+# 为了使示例可独立运行，我们使用 mock 函数模拟 LLM 调用
+def mock_planner_llm(topic: str) -> List[str]:
+    """模拟规划师 LLM，将主题分解为子任务。"""
+    print(f"--- 规划师正在为主题 '{topic}' 生成研究计划... ---")
+    return [
+        f"探究 {topic} 的历史渊源",
+        f"分析 {topic} 的当前市场现状",
+        f"预测 {topic} 的未来发展趋势",
+    ]
+
+
+def mock_researcher_llm(query: str) -> str:
+    """模拟研究员 LLM，针对子问题进行“研究”。"""
+    print(f"--- 研究员正在研究: '{query}'... ---")
+    # 模拟耗时操作
+    asyncio.sleep(1)
+    return f"关于 '{query}' 的详细研究报告内容..."
+
+
+def mock_writer_llm(research_data: Dict) -> str:
+    """模拟报告撰写者 LLM，将研究结果整合成最终报告。"""
+    print("--- 报告撰写者正在整合所有研究资料，生成最终报告... ---")
+    report_parts = ["# 最终研究报告\n\n"]
+    for query, result in research_data.items():
+        report_parts.append(f"## {query}\n\n{result}\n\n")
+    return "".join(report_parts)
+
+
+# [知识点 1] 图定义：使用 TypedDict 定义图的状态 (State)
+class ResearchTeamState(TypedDict):
+    """定义研究团队工作流的状态。"""
+    topic: str
+    sub_queries: List[str]
+    # `add_messages` 是一种方便的 reducer，用于将并行研究员节点返回的结果聚合到一个列表中
+    # 每个研究员返回一个字典 {'query': 'result'}，最终会形成一个字典列表
+    research_results: Annotated[list[dict], add_messages]
+    # 聚合后的研究数据
+    aggregated_data: Dict[str, str]
+    # 最终报告
+    final_report: str
+    # 用于人机交互的标志
+    human_review_passed: bool
+
+
+# [知识点 2] 节点系统：每个节点都是一个 Python 函数
+def planner_node(state: ResearchTeamState):
+    """规划师节点：接收主题，生成研究子查询。"""
+    queries = mock_planner_llm(state["topic"])
+    return {"sub_queries": queries}
+
+
+async def researcher_node(state: ResearchTeamState):
+    """研究员节点：接收一个子查询并返回研究结果。
+    注意：此节点将由 Send API 并行调用。
+    `state['sub_queries']` 此时是一个列表，但 `Send` 会为每个任务传入一个特定的子查询。
+    """
+    # `Send` 会将任务特定的值放入状态中，我们在这里读取它
+    query = state["sub_queries"]
+    result = await asyncio.to_thread(mock_researcher_llm, query)
+    # 返回的结果将通过 `add_messages` 聚合到 `research_results` 列表中
+    return {"research_results": [{query: result}]}
+
+
+def aggregator_node(state: ResearchTeamState):
+    """聚合节点：将并行研究的结果合并成一个字典。"""
+    print("--- 聚合所有研究员的成果... ---")
+    aggregated = {}
+    for res_dict in state["research_results"]:
+        aggregated.update(res_dict)
+    return {"aggregated_data": aggregated}
+
+
+def writer_node(state: ResearchTeamState):
+    """报告撰写节点：生成最终报告。"""
+    report = mock_writer_llm(state["aggregated_data"])
+    return {"final_report": report}
+
+
+def human_review_node(state: ResearchTeamState):
+    """人机交互节点：此节点仅用于触发中断，让人类进行审核。"""
+    print("--- 等待人工审核... ---")
+    # 实际操作在中断和恢复逻辑中完成
+    return {}
+
+
+# [知识点 7 & 8] 条件边 & Send API
+def router_function(state: ResearchTeamState):
+    """路由函数：决定下一步是结束还是分发任务给研究员。"""
+    print("--- 规划完成，准备分发研究任务... ---")
+    # 使用 Send API 为每个子查询动态创建一个并行的 researcher_node 任务
+    # 这是 Map-Reduce 模式的体现
+    if not state["sub_queries"]:
+        return END
+    return [Send("researcher", {"sub_queries": q}) for q in state["sub_queries"]]
+
+
+def after_review_router(state: ResearchTeamState):
+    """审核后路由：根据人工审核结果决定是生成报告还是结束。"""
+    print("--- 人工审核结束，进行路由... ---")
+    if state.get("human_review_passed"):
+        return "writer"
+    else:
+        print("--- 人工审核未通过，工作流结束。 ---")
+        return END
+
+
+# [知识点 1, 2, 3] 图构建：定义状态、添加节点和边
+graph_builder = StateGraph(ResearchTeamState)
+
+graph_builder.add_node("planner", planner_node)
+graph_builder.add_node("researcher", researcher_node)
+graph_builder.add_node("aggregator", aggregator_node)
+graph_builder.add_node("human_review", human_review_node)
+graph_builder.add_node("writer", writer_node)
+
+graph_builder.set_entry_point("planner")
+
+# [知识点 6 & 8] 从 planner 节点出来后，使用条件路由和 Send API 实现并行执行
+graph_builder.add_conditional_edges("planner", router_function)
+
+# [知识点 3] 所有并行的 researcher 节点完成后，结果会汇集到 aggregator 节点
+graph_builder.add_edge("researcher", "aggregator")
+
+# 聚合后进入人工审核环节
+graph_builder.add_edge("aggregator", "human_review")
+
+# [知识点 7] 根据人工审核结果，决定下一步走向
+graph_builder.add_conditional_edges(
+    "human_review",
+    after_review_router,
+    {"writer": "writer", END: END},
+)
+
+graph_builder.add_edge("writer", END)
+
+# [知识点 5 & 12] 图编译与人机交互配置
+# 使用内存中的 SQLite 作为检查点，以支持中断和恢复
+memory_saver = AsyncSqliteSaver.new_memory()
+
+research_graph = graph_builder.compile(
+    checkpointer=memory_saver,
+    # 在 `human_review` 节点之前中断，以实现人工干预
+    interrupt_before=["human_review"],
+)
+
+
+async def main():
+    """主函数：执行图并处理人机交互。"""
+    config = {"configurable": {"thread_id": "research-thread-1"}}
+    topic = "人工智能在软件工程中的应用"
+    inputs = {"topic": topic}
+
+    print(f"🚀 开始执行研究工作流，主题: {topic}")
+    
+    # 异步执行图
+    async for event in research_graph.astream(inputs, config=config):
+        for v in event.values():
+            print(f"节点 '{next(iter(v))}' 已完成。")
+
+    # [知识点 12] 处理中断
+    # 此时图的执行已在 `human_review` 节点前暂停
+    snapshot = await research_graph.aget_state(config)
+    print("\n⏸️ 工作流已中断，等待人工审核。")
+    print("当前研究成果:")
+    print(snapshot.values["aggregated_data"])
+
+    # 模拟人工审核过程
+    user_input = input("研究成果是否通过审核？(yes/no): ").strip().lower()
+    
+    if user_input == 'yes':
+        print("✅ 审核通过，继续执行以生成最终报告...")
+        # 更新状态并恢复执行
+        await research_graph.aupdate_state(
+            config, {"human_review_passed": True}
+        )
+        # 从中断处继续执行
+        async for event in research_graph.astream(None, config=config):
+             for v in event.values():
+                print(f"节点 '{next(iter(v))}' 已完成。")
+    else:
+        print("❌ 审核未通过，工作流将终止。")
+        await research_graph.aupdate_state(
+            config, {"human_review_passed": False}
+        )
+        async for event in research_graph.astream(None, config=config):
+             for v in event.values():
+                print(f"节点 '{next(iter(v))}' 已完成。")
+
+    # 打印最终状态
+    final_state = await research_graph.aget_state(config)
+    if final_state.values.get("final_report"):
+        print("\n📄 === 最终报告 ===\n")
+        print(final_state.values["final_report"])
+    else:
+        print("\n工作流已结束，未生成最终报告。")
+
+
+if __name__ == "__main__":
+    # 在 Python 3.8+ 中，可以直接运行 async main
+    asyncio.run(main())
