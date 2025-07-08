@@ -2,18 +2,21 @@
 # SPDX-License-Identifier: MIT
 
 from typing import Literal
+from src.config.yaml_loader import load_yaml_config
+from pathlib import Path
 
-# Define available LLM types
-LLMType = Literal["basic", "reasoning", "vision"]
+
+# Dynamically load LLM types from conf.yaml
+def get_llm_types():
+    conf_path = Path(__file__).parent.parent.parent / "conf.yaml"
+    config = load_yaml_config(str(conf_path.resolve()))
+    # Extract model types from keys like "BASIC_MODEL", "REASONING_MODEL", etc.
+    return [key.replace('_MODEL', '').lower() for key in config.keys() if key.endswith('_MODEL')]
+
+
+LLM_TYPES = get_llm_types()
+LLMType = Literal[tuple(LLM_TYPES)]
 
 # Define agent-LLM mapping
-AGENT_LLM_MAP: dict[str, LLMType] = {
-    "coordinator": "basic",
-    "planner": "basic",
-    "researcher": "basic",
-    "coder": "basic",
-    "reporter": "basic",
-    "podcast_script_writer": "basic",
-    "ppt_composer": "basic",
-    "prose_writer": "basic",
-}
+# Ensure that the default LLM type ('basic') is available
+DEFAULT_LLM_TYPE = "basic" if "basic" in LLM_TYPES else (LLM_TYPES[0] if LLM_TYPES else None)

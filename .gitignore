@@ -6,10 +6,10 @@ dist/
 images/
 wheels/
 *.egg-info
+*.png
 
 # Virtual environments
 .venv
-.env
 .env
 conf.yaml
 .vscode

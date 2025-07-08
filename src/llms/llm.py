@@ -9,7 +9,6 @@ from langchain_openai import ChatOpenAI, AzureChatOpenAI
 from langchain_openai.chat_models.base import BaseChatOpenAI
 
 
-
 _llm_cache: dict[LLMType, BaseChatOpenAI] = {}
 
 
@@ -24,12 +23,8 @@ def _create_llm_by_config(llm_type: LLMType, conf: Dict[str, Any]) -> BaseChatOp
     Raises:
         ValueError: If the LLM type is unsupported or the configuration is invalid.
     """
-    llm_type_mapping = {
-        "basic": conf.get("BASIC_MODEL"),
-        "reasoning": conf.get("REASONING_MODEL"),
-        "vision": conf.get("VISION_MODEL")
-    }
-    llm_config = llm_type_mapping.get(llm_type)
+    model_key = f"{llm_type.upper()}_MODEL"
+    llm_config = conf.get(model_key)
     if not llm_config:
         raise ValueError(f"Unsupported LLM type: {llm_type}")
     if not isinstance(llm_config, dict):
@@ -39,7 +34,7 @@ def _create_llm_by_config(llm_type: LLMType, conf: Dict[str, Any]) -> BaseChatOp
         return AzureChatOpenAI(**llm_config)
     # 否则创建 ChatOpenAI 实例
     return ChatOpenAI(**llm_config)
-    
+
 
 def get_llm_by_type(llm_type: LLMType) -> BaseChatOpenAI:
     """
@@ -59,12 +54,14 @@ def get_llm_by_type(llm_type: LLMType) -> BaseChatOpenAI:
     return _llm_cache[llm_type]
 
 
-basic_llm = get_llm_by_type("basic")
-reasoning_llm = get_llm_by_type("reasoning")
-vision_llm = get_llm_by_type("vision")
-
-
 if __name__ == "__main__":
     # Example usage
-    llm = get_llm_by_type("basic")
-    print(f"Loaded LLM: {llm}")
+    # To run this example, ensure you have a conf.yaml with at least one model defined, e.g., BASIC_MODEL
+    try:
+        llm = get_llm_by_type("basic")
+        print(f"Loaded LLM: {llm}")
+        response = llm.invoke("你好")
+        print(response)
+    except ValueError as e:
+        print(f"Error loading LLM: {e}")
+        print("Please ensure your conf.yaml is configured correctly.")

@@ -1,16 +1,21 @@
-from src.tools.builtin import tavily_search, jina_search, local_shell
-from src.tools.web_crawl import tavily_web_crawl, requests_web_crawl
-from src.tools.python_repl import python_repl_tool
-from src.tools.tts import tts_tool
-from src.tools.decorator import *
+"""
+This package aggregates all the tools from the different modules within this directory.
 
-__all__ = [
-    "tavily_search",
-    "jina_search",
-    "local_shell",
-    "tavily_web_crawl",
-    "requests_web_crawl",
-    "python_repl_tool",
-    "tts_tool",
-    "add_human_in_the_loop"
-]
+The goal is to provide a single, unified list of tools that can be easily imported
+and used by the agent creation logic.
+
+By using an `__all__` declaration, we explicitly define the public API of this package,
+making it clear which names are intended for external use.
+"""
+
+from src.tools.builtin import all_tools as builtin_tools
+from src.tools.python_repl import python_repl_tool
+from src.tools.web_crawl import tavily_web_crawl
+
+# Combine all tools from the different modules into a single list.
+# This list serves as the central point of access for all available tools.
+all_tools = builtin_tools + [python_repl_tool, tavily_web_crawl]
+
+# Define the public API of the 'tools' package.
+# When another module executes `from src.tools import *`, only 'all_tools' will be imported.
+__all__ = ["all_tools"]
