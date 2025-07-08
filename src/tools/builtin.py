@@ -39,6 +39,7 @@ from langchain_community.utilities import (
 # Requires TAVILY_API_KEY environment variable.
 tavily_search = TavilySearchResults(
     name="tavily_search",
+    tavily_api_key=os.getenv("TAVILY_API_KEY", ""),
     search_depth="advanced",
     max_results=3,
     description="A powerful search engine for finding up-to-date information on the web."
