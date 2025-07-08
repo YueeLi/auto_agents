@@ -17,6 +17,9 @@ Make sure these are configured in your environment before using the tools.
 """
 
 import os
+import wikipedia as _wikipedia_pkg  # type: ignore
+import arxiv as _arxiv_pkg  # type: ignore
+
 from langchain_community.tools import (
     TavilySearchResults,
     ShellTool,
@@ -55,19 +58,30 @@ local_shell = ShellTool(
     description="Executes shell commands on the local machine. Use with caution."
 )
 
+
 # 4. Wikipedia Search Tool
 # A tool for querying Wikipedia.
+wikipedia_api = WikipediaAPIWrapper(wiki_client=_wikipedia_pkg)
 wikipedia = WikipediaQueryRun(
     name="wikipedia_search",
-    api_wrapper=WikipediaAPIWrapper(),
-    description="A tool to query Wikipedia for information on a specific topic."
+    api_wrapper=wikipedia_api,
+    description="A tool to search for information on Wikipedia."
 )
+
 
 # 5. Arxiv Search Tool
 # A tool for searching for scientific papers on ArXiv.
+arxiv_api = ArxivAPIWrapper(
+    arxiv_search=_arxiv_pkg.Search,
+    arxiv_exceptions=(
+        _arxiv_pkg.ArxivError,
+        _arxiv_pkg.UnexpectedEmptyPageError,
+        _arxiv_pkg.HTTPError,
+    ),
+)
 arxiv = ArxivQueryRun(
     name="arxiv_search",
-    api_wrapper=ArxivAPIWrapper(),
+    api_wrapper=arxiv_api,
     description="A tool to search for scientific papers on ArXiv."
 )
 
