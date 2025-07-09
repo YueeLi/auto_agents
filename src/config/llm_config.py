@@ -1,6 +1,3 @@
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
-
 from typing import Literal
 from src.config.yaml_loader import load_yaml_config
 from pathlib import Path

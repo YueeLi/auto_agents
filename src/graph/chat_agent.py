@@ -1,6 +1,6 @@
 from src.llms.llm import get_llm_by_type, basic_llm
 from src.tools import *
-from src.config.agent_config import LLMType
+from src.config.llm_config import LLMType
 from typing import Annotated
 from typing_extensions import TypedDict
 from langgraph.types import interrupt, Command
