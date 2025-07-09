@@ -1,0 +1,47 @@
+# General Language Model Configuration
+LLM_MODEL:
+  # API key for the language model
+  api_key: "your_api_key_here"
+  # Base URL for the API
+  base_url: "https://api.openai.com/v1"
+  # Model name to use
+  model: "gpt-4-turbo-preview"
+  # Maximum number of tokens for the model's response
+  max_tokens: 4096
+  # Temperature for sampling, a value between 0 and 1
+  temperature: 0.7
+
+# Video Generation Model (Sora) Configuration
+VIDEO_MODEL:
+  # Azure OpenAI endpoint. Required.
+  # Example: https://your-resource-name.openai.azure.com/
+  azure_endpoint: "your_azure_openai_endpoint"
+
+  # Deployment name for the Sora model on Azure. Required.
+  deployment_name: "your_sora_deployment_name"
+
+  # API version. Optional, defaults to "2024-05-01-preview".
+  api_version: "2024-05-01-preview"
+
+  # --- Authentication ---
+  # Choose ONE of the following authentication methods.
+  # If api_key is provided, it will be used.
+  # If api_key is empty or not provided, the system will attempt to use
+  # Entra ID (keyless) authentication via DefaultAzureCredential.
+
+  # Method 1: API Key (recommended for simplicity)
+  # Your Azure OpenAI API key.
+  api_key: "your_azure_openai_api_key"
+
+  # Method 2: Entra ID (Keyless) Authentication (more secure)
+  # To use this method, leave 'api_key' blank or remove it.
+  # You must be logged in via the Azure CLI ('az login') in your environment.
+  # The logged-in principal must have the "Cognitive Services User" role
+  # assigned on your Azure OpenAI resource.
+
+  # --- Video Generation Parameters ---
+  # Default video generation parameters. These can be overridden in the function call.
+  height: 1080
+  width: 1920
+  duration: 10 # in seconds
+  # model: "sora-1.0" # Optional, if you need to specify a model other than the deployment default.

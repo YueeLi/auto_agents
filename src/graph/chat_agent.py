@@ -25,6 +25,7 @@ TOOLS = [
     add_human_in_the_loop(python_repl_tool),
     add_human_in_the_loop(tavily_search),
     add_human_in_the_loop(tavily_web_crawl),
+    add_human_in_the_loop(generate_sora_video),
 ]
 
 # llm = get_llm_by_type("reasoning").bind_tools(TOOLS)
@@ -106,8 +107,17 @@ build_image(graph)
 
 config = {"configurable": {"thread_id": "1"}, "recursion_limit": 10}
 
+# events = graph.stream(
+#     {"messages": [HumanMessage(content="写一段脚本计算 2.11111 + 3.22222")]},
+#     config=config,
+# )
+# for event in events:
+#     if "messages" in event:
+#         event["messages"][-1].pretty_print()
+
+
 events = graph.stream(
-    {"messages": [HumanMessage(content="写一段脚本计算 2.11111 + 3.22222")]},
+    {"messages": [HumanMessage(content="请用 sora 生成一个关于一只猫在打篮球的视频")]},
     config=config,
 )
 for event in events:
