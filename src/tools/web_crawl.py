@@ -9,6 +9,7 @@ import os
 import json
 import logging
 from pydantic import BaseModel, Field
+import trafilatura
 from langchain_core.tools import tool
 from langchain_tavily import TavilyExtract
 from langchain_community.tools.playwright.utils import create_sync_playwright_browser
@@ -98,7 +99,29 @@ def tavily_web_crawl(url: str) -> str:
         error_result = {"url": url, "content": "", "status_code": 500, "error": f"An unexpected error occurred: {e}"} 
         return json.dumps(error_result, indent=2)
 
-# --- Playwright Web Crawl Tool ---
+def _html_to_markdown(html_content: str) -> str:
+    """Converts HTML content to Markdown format using trafilatura for a more generic solution.
+
+    Args:
+        html_content: The HTML content to convert.
+
+    Returns:
+        The converted Markdown content.
+    """
+    # Use trafilatura to extract the main content and convert it to Markdown
+    markdown_content = trafilatura.extract(
+        html_content,
+        output_format='markdown',
+        include_comments=False,  # Don't include comments
+        include_tables=True,  # Include tables
+        favor_precision=True  # Favor precision over recall
+    )
+
+    if not markdown_content:
+        return "No main content found."
+
+    return markdown_content
+
 @tool("playwright_web_crawl", args_schema=WebCrawlInput)
 def playwright_web_crawl(url: str) -> str:
     """Performs a web crawl and extracts text content from a given URL using Playwright.
@@ -107,21 +130,25 @@ def playwright_web_crawl(url: str) -> str:
     It requires the `playwright` and `beautifulsoup4` packages.
     """
     logger.info(f"Executing Playwright web crawl for URL: {url}")
-    try:
-        from bs4 import BeautifulSoup
-    except ImportError:
-        error_result = {"url": url, "content": "", "status_code": 500, "error": "The 'beautifulsoup4' package is required. Please install it with 'pip install beautifulsoup4'."}
-        return json.dumps(error_result, indent=2)
-
     browser = None
     try:
         browser = create_sync_playwright_browser()
         page = browser.new_page()
-        response = page.goto(url)
+
+        # Add anti-scraping measures
+        page.set_extra_http_headers({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+        })
+
+        response = page.goto(url, timeout=60000, wait_until="networkidle")
         status_code = response.status if response else 0
         html_content = page.content()
-        soup = BeautifulSoup(html_content, "lxml")
-        content = " ".join(text for text in soup.stripped_strings)
+        content = _html_to_markdown(html_content)
 
         if not content:
             raise ContentExtractionError("Empty content extracted from Playwright.")
@@ -153,6 +180,6 @@ if __name__ == "__main__":
     
     # Example usage for Playwright:
     print("\n****** playwright_web_crawl ******")
-    playwright_test_url = "https://mp.weixin.qq.com/s/Vs60FSj6c41fNgZE6rV_Jw"
+    playwright_test_url = "https://mp.weixin.qq.com/s/SnvovJF-Hs3L15XeQRSG7A"
     result_json = playwright_web_crawl.invoke({"url": playwright_test_url})
     print(json.dumps(json.loads(result_json), indent=4, ensure_ascii=False))

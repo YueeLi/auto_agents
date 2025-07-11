@@ -14,7 +14,7 @@ class SoraAPIError(Exception):
 
 class SoraClient:
     """Azure OpenAI Sora 视频生成 API 客户端"""
-    API_VERSION = "2024-05-01-preview"
+    API_VERSION = "preview"
     MODEL_NAME = "sora"
     OUTPUT_DIR = "generated_videos"
 
@@ -135,3 +135,24 @@ class SoraClient:
         except Exception as e:
             logging.error(f"下载视频时发生未知错误: {e}")
             raise SoraAPIError(f"下载视频时发生未知错误: {e}") from e
+        
+
+if __name__ == "__main__":    
+    # 测试代码
+    client = SoraClient()
+    job_id = client.start_video_generation(
+        prompt="""
+Cinematic wide shot in pure white void space. Colorful LEGO bricks floating and flying through empty space, magically assembling into complex architectural structure. Bricks rotate and snap together with precise movements - bright red, blue, yellow, green pieces creating intricate geometric patterns. Camera slowly orbits around the growing construction, revealing the assembly from multiple angles. Shallow depth of field keeps focus on active building area while background bricks blur into motion. Crisp plastic snap sounds, gentle whooshing of bricks flying through air, rhythmic clicking of connections. Light ambient electronic music building in intensity. No other objects in frame, just pure white background and vibrant LEGO pieces. 4K resolution, perfect lighting shows plastic texture and vibrant colors. (no subtitles)
+"""
+        ,
+        n_seconds=20,
+        height=1080,
+        width=1080,
+        n_variants=1
+    )
+    video_url = client.get_video_url(job_id)
+    print(f"视频生成成功，下载地址: {video_url}")
+
+    # 测试下载视频
+    # https://lingli-agent-resource.openai.azure.com/openai/v1/video/generations/gen_01jzqmn4kcfjwtxwrz46qy1p34/content/video?api-version=preview
+    client.download_video(video_url, "sunset_video.mp4")
